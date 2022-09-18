@@ -1,0 +1,17 @@
+menu "Example Configuration"
+
+    config GPIO_INPUT_0
+        int "GPIO input pin 0"
+        range ENV_GPIO_RANGE_MIN ENV_GPIO_IN_RANGE_MAX
+        default 34
+        help
+            GPIO pin number to be used as GPIO_INPUT_IO_0.
+    
+    config GPIO_INPUT_1
+        int "GPIO input pin 1"
+        range ENV_GPIO_RANGE_MIN ENV_GPIO_IN_RANGE_MAX
+        default 33
+        help
+            GPIO pin number to be used as GPIO_INPUT_IO_1.
+
+endmenu
