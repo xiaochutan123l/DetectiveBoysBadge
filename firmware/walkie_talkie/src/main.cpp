@@ -11,8 +11,6 @@
 #include<stdio.h>
 #include<time.h>
 
-#include<audio_example_file.h>
-
 #define AUDIO_HZ (8000)
 #define SEG_NUM_PER_SEC (40) //25ms segment.
 #define BUF_LEN (200) // 8 x (8000 / 40) bytes
@@ -77,7 +75,6 @@ esp_err_t app_main(void)
     printf("espNow init finished\n");
     //Start handling loop.
     //espNow.registerCallback(onReceivedPacket);
-    espNow.start();
 
     // set up gpio.
     ESP_GPIO gpio1(GPIO_NUM_32, Pin_mode::INPUT, Pull_mode::PULL_UP);
@@ -102,7 +99,6 @@ esp_err_t app_main(void)
 
     printf("running into while loop\n");
     while(1) {
-        printf("bttun: %d", gpio1.readLevel());
         if (gpio1.readLevel() == 1) {
             printf("push botton pushed, recording....\n\n");
             if (espNow.get_botton_status() == false) {
@@ -113,9 +109,7 @@ esp_err_t app_main(void)
 
             while(esp_timer_get_time() - start_t < 1000000 || gpio1.readLevel() == 1){
                 printf("recored %d bytes.\n", audio.audIO_read((char*)read_buf, read_buf_len));
-                //vTaskDelay(25 / portTICK_PERIOD_MS);
                 convert_int16_to_uint8(read_buf, send_buf, sample_size);
-                //memcpy(big_send_buf+ 200*send_count, send_buf, data_len);
                 espNow.broadcast(send_buf, sample_size); 
             }
         }
@@ -124,18 +118,10 @@ esp_err_t app_main(void)
             if (espNow.get_botton_status() == true) {
                 espNow.set_botton_status(false);
             }
-            // receive audio data and play. 
-            //从回调函数那搞来数据包内容.
-            
             example_espnow_event_recv_cb_t packet;
-            //size_t s_t = esp_timer_get_time();
             while (gpio1.readLevel() == 0){
                 if (espNow.recv_packet(packet) == true) {
                     convert_uint8_to_int16(packet.data, play_buf, packet.data_len);
-                    //for(int i = 0; i < 20; i++){
-                    //    printf("%d, ", packet.data[i]);
-                    //}
-                    //printf("\n");
                     printf("played %d bytes.\n", audio.audIO_write((char*)play_buf, play_buf_len));
                     free(packet.data);
                 }

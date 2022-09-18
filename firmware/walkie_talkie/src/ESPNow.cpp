@@ -13,13 +13,9 @@ static void espnow_recv_cb(const uint8_t *mac_addr, const uint8_t *data, int len
 // record the push botton status.
 static bool pushed = false;
 
-static std::deque<example_espnow_event_recv_cb_t> recv_deque;
-static int recv_deque_size = 100; // default 10.
-static int play_available_size = 80;
-static bool ready_play = false;
+static int recv_queue_size = 100; // default 10.
 static int queue_item_count = 0;
-
-static bool send_ok = true;
+//static bool send_ok = true;
 
 /* WiFi should start before using ESPNOW */
 static void wifi_init(void)
@@ -43,9 +39,7 @@ static void espNow_init()
     ESP_LOGI(TAG, "ESPNow init begin");
     /* Initialize ESPNOW and register sending and receiving callback function. */
 
-    //queue = xQueueCreate(ESPNOW_QUEUE_SIZE, sizeof(example_espnow_event_t));
-    //queue = xQueueCreate(ESPNOW_QUEUE_SIZE, sizeof(example_espnow_event_recv_cb_t));
-    queue = xQueueCreate(recv_deque_size, sizeof(example_espnow_event_recv_cb_t));
+    queue = xQueueCreate(recv_queue_size, sizeof(example_espnow_event_recv_cb_t));
     if (queue == NULL) {
         ESP_LOGE(TAG, "Create mutex fail");
         //return ESP_FAIL;
@@ -85,25 +79,8 @@ static void espNow_init()
  * necessary data to a queue and handle it from a lower priority task. */
 static void espnow_send_cb(const uint8_t *mac_addr, esp_now_send_status_t status)
 {
-    /*
-    ESP_LOGI(TAG, "into send callback");
-    example_espnow_event_t evt;
-    example_espnow_event_send_cb_t *send_cb = &evt.info.send_cb;
-
-    if (mac_addr == NULL) {
-        ESP_LOGE(TAG, "Send cb arg error");
-        return;
-    }
-
-    evt.id = EXAMPLE_ESPNOW_SEND_CB;
-    memcpy(send_cb->mac_addr, mac_addr, ESP_NOW_ETH_ALEN);
-    send_cb->status = status;
-    //if (xQueueSend(queue, &evt, ESPNOW_MAXDELAY) != pdTRUE) {
-    //    ESP_LOGW(TAG, "Send send queue fail");
-    //}
-    */
-    ESP_LOGI(TAG, "into send callback");
-    send_ok = true;
+    //ESP_LOGI(TAG, "into send callback");
+    //send_ok = true;
 }
 
 static void espnow_recv_cb(const uint8_t *mac_addr, const uint8_t *data, int len)
@@ -134,24 +111,6 @@ static void espnow_recv_cb(const uint8_t *mac_addr, const uint8_t *data, int len
             free(recv_cb->data);
         }
         queue_item_count++;
-        //ESP_LOGI(TAG, "emplace_back");
-        /*
-        recv_deque.push_back(evt.info.recv_cb);
-        if (recv_deque.size() >= recv_deque_size){
-            printf("add one packet\n");
-            recv_deque.pop_front();
-            
-        }
-        
-        
-        if (recv_deque.size() < play_available_size){
-            //printf("add one packet\n");
-            //recv_deque.pop_front();
-            recv_deque.push_back(evt.info.recv_cb);
-            
-        }
-        */
-        //free(recv_cb->data);
     }
     else{
         //printf("push botton is pushed, do nothing\n");
@@ -205,21 +164,7 @@ void ESPNow::sendToAll(uint8_t *data, size_t len)  {
     }
 }
 
-void my_delay_us(size_t time) {
-    size_t start_time = esp_timer_get_time();
-    while (true){
-        if (esp_timer_get_time() - start_time >= time){
-            break;
-        }
-    }
-}
-
 void ESPNow::broadcast(uint8_t *data, size_t len) {
-    //if (esp_now_send(broadcast_mac, data, len) != ESP_OK) {
-    //    ESP_LOGE(TAG, "Send error");
-    //    deinit();
-    //}
-    //my_delay_us(30000);
     esp_err_t error = esp_now_send(broadcast_mac, data, len);
     if (error != ESP_OK) {
         ESP_LOGE(TAG, "Error num: %d\n", error);
@@ -232,49 +177,6 @@ bool ESPNow::isSendAvalaible() {
     return sendAvalaible;
 }
 
-bool ESPNow::play_available() {
-    return recv_deque.size() >= play_available_size;
-}
-
-void ESPNow::task() {
-    example_espnow_event_t evt;
-    while (xQueueReceive(queue, &evt, portMAX_DELAY) == pdTRUE) {
-        switch (evt.id) {
-            case EXAMPLE_ESPNOW_SEND_CB:
-            {
-                sendAvalaible = evt.info.send_cb.status;
-                break;
-            }
-            case EXAMPLE_ESPNOW_RECV_CB:
-            {
-                if (_handler != nullptr){
-                _handler(evt.info.recv_cb);
-                }
-                else {
-                    handle_recv_packet(evt.info.recv_cb);
-                }
-                break;
-            }
-            default:
-                ESP_LOGE(TAG, "Callback type error: %d", evt.id);
-                break;
-        }
-    }
-}
-
-/*
-void ESPNow::task_impl(void* _this) {
-    static_cast<ESPNow*>(_this)->task();
-}
-*/
-
-void ESPNow::start() {
-    /* Start */
-    //xTaskCreate(this->task_impl, "example_espnow_task", 2048, this, 4, NULL);
-    //xTaskCreate(this->task_impl, "example_espnow_task", 2048, this, 3, NULL);
-    //task();
-}
-
 void ESPNow::set_botton_status(bool status) {
     if (pushed != status) {
         pushed = status;
@@ -285,56 +187,10 @@ bool ESPNow::get_botton_status() {
     return pushed;
 }
 
-void ESPNow::handle_recv_packet(example_espnow_event_recv_cb_t& packet) {
-    //TODO maybe change to a ring buffer if deque consums too much resources.
-    recv_deque.emplace_back(packet);
-    if (recv_deque.size() > recv_deque_size){
-        recv_deque.pop_front();
-    }
-}
-
 bool ESPNow::recv_packet(example_espnow_event_recv_cb_t& packet) {
-    /*
-    printf("recv queue size: %d\n", recv_deque.size());
-    //if (recv_deque.empty()){
-    if (recv_deque.size()< play_available_size && ready_play == false){
-        //printf("recv_packet0\n");
-        packet = nullptr;
-        return false;
-    }
-    else{
-        ready_play = true;
-        //printf("recv_packet2\n");
-        packet->data = recv_deque.front().data;
-        packet->data_len = recv_deque.front().data_len;
-        //printf("recv_packet3\n");
-        recv_deque.pop_front();
-        //printf("recv_packet4\n");
-        return true;
-    }
-    //example_espnow_event_t evt;
-    */
-    /*
-    //if (xQueueReceive(queue, &packet, portMAX_DELAY) == pdTRUE) {
-    if (recv_count < play_available_size && ready_play == false){
-        //printf("recv_packet0\n");
-        //packet = nullptr;
-        return false;
-    }
-    else{
-        ready_play = true;
-        if (xQueueReceive(queue, &packet, portMAX_DELAY) == pdTRUE) {
-            //handle_recv_packet(evt.info.recv_cb);
-            return true;
-        }
-        else {
-            return false;
-        }
-    }*/
     if (queue_item_count > 0){
         if (xQueueReceive(queue, &packet, portMAX_DELAY) == pdTRUE) {
             queue_item_count--;
-            //handle_recv_packet(evt.info.recv_cb);
             return true;
         }
         else {

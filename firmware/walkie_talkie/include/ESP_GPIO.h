@@ -1,3 +1,5 @@
+#pragma once
+
 #include "driver/gpio.h"
 
 #define ESP_INTR_FLAG_DEFAULT 0
